@@ -1,0 +1,25 @@
+# systemd unit for the NL Query Agent (FastAPI + static frontend).
+# Install on the VM:
+#   sudo cp deploy/nlquery.service /etc/systemd/system/nlquery.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now nlquery
+# Adjust User / WorkingDirectory / uv path if the VM layout differs.
+
+[Unit]
+Description=NL Query Agent (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Hackathon
+Environment=HOME=/home/ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+# uv reads .env via the app (config.load_dotenv) from WorkingDirectory.
+ExecStart=/home/ubuntu/.local/bin/uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

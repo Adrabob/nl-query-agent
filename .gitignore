@@ -1,0 +1,32 @@
+# Secrets
+.env
+
+# Internal project source-of-truth (kept local, not published)
+CLAUDE.md
+
+# Oracle Wallet files
+*.p12
+*.sso
+tnsnames.ora
+sqlnet.ora
+cwallet.sso
+ewallet.p12
+wallet/
+
+# Python
+__pycache__/
+*.py[oc]
+*.pyo
+.venv/
+
+# Distribution / packaging
+dist/
+build/
+wheels/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

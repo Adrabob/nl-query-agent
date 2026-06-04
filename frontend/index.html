@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sales Buddy</title>
+        <link rel="stylesheet" href="index.css">
+    </head>
+    <body>
+
+        <div class="app">
+            <aside class="sidebar">
+                <div class="brand">Sales Buddy</div>
+                <button class="new-chat" id="newChat">+ New Chat</button>
+
+                <div class="examples">
+                    <div class="examples-title">Try an example</div>
+                    <button class="chip">top 5 countries by revenue</button>
+                    <button class="chip">monthly revenue trend for UK customers in 2011</button>
+                    <button class="chip">what is the total value of cancelled orders?</button>
+                    <button class="chip">top 10 best-selling products by revenue</button>
+                    <button class="chip">what counts as a return in this dataset?</button>
+                    <button class="chip">can we calculate gross margin from this data?</button>
+                    <button class="chip">how is average order value defined?</button>
+                </div>
+
+                <button id="themeToggle" class="theme-toggle">
+                    <img src="moon.png" alt="Dark" id="themeToggle-image">
+                    <span id="themeToggle-label">Dark mode</span>
+                </button>
+            </aside>
+
+            <main class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message bot">Hello! Ask me about sales, customers, products, or how the data is defined.</div>
+                </div>
+
+                <div class="chat-input">
+                    <input type="text" id="messageInput" placeholder="Type a message...">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </main>
+        </div>
+
+        <script>
+            const input = document.getElementById("messageInput");
+            const messages = document.getElementById("chatMessages");
+            const GREETING = "Hello! Ask me about sales, customers, products, or how the data is defined.";
+
+            // Mutable so "New Chat" can start a fresh conversation.
+            let sessionId = newSessionId();
+
+            function newSessionId() {
+                return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+            }
+
+            input.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+
+            document.getElementById("newChat").addEventListener("click", () => {
+                sessionId = newSessionId();
+                messages.innerHTML = "";
+                const hi = addBubble("bot");
+                hi.textContent = GREETING;
+                input.value = "";
+                input.focus();
+            });
+
+            // Example chips fill the input and send.
+            document.querySelectorAll(".chip").forEach(chip => {
+                chip.addEventListener("click", () => {
+                    input.value = chip.textContent;
+                    sendMessage();
+                });
+            });
+
+            function scrollToBottom() { messages.scrollTop = messages.scrollHeight; }
+
+            function addBubble(className) {
+                const el = document.createElement("div");
+                el.className = "message " + className;
+                messages.appendChild(el);
+                return el;
+            }
+
+            async function sendMessage() {
+                const text = input.value.trim();
+                if (!text) return;
+
+                addBubble("user").textContent = text;
+                input.value = "";
+
+                const loading = addBubble("bot loading");
+                loading.textContent = "...";
+                scrollToBottom();
+
+                try {
+                    const res = await fetch("/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ question: text, session_id: sessionId })
+                    });
+                    const data = await res.json();
+                    loading.remove();
+                    renderResponse(data);
+                } catch (err) {
+                    loading.remove();
+                    renderError("Could not reach the server. Please try again.");
+                }
+                scrollToBottom();
+            }
+
+            function renderResponse(data) {
+                if (data.error) {
+                    renderError(data.message || "Something went wrong.");
+                } else if (data.route === "docs") {
+                    renderDocs(data);
+                } else {
+                    renderSql(data);
+                }
+            }
+
+            function addBadge(bubble, label) {
+                const badge = document.createElement("span");
+                badge.className = "badge";
+                badge.textContent = label;
+                bubble.appendChild(badge);
+            }
+
+            function renderError(message) {
+                addBubble("bot error").textContent = message;
+            }
+
+            function renderDocs(data) {
+                const bubble = addBubble("bot");
+                addBadge(bubble, "Docs");
+
+                const body = document.createElement("div");
+                body.className = "md";
+                body.innerHTML = renderMarkdown(data.answer || "No answer available.");
+                bubble.appendChild(body);
+
+                if (data.sources && data.sources.length) {
+                    const details = document.createElement("details");
+                    details.className = "sources-panel";
+                    const summary = document.createElement("summary");
+                    const names = [...new Set(data.sources.map(s => s.doc))].join(", ");
+                    summary.textContent = "Sources (" + names + ")";
+                    details.appendChild(summary);
+
+                    const box = document.createElement("div");
+                    box.className = "sources";
+                    data.sources.forEach(s => {
+                        const item = document.createElement("div");
+                        item.className = "source-item";
+                        item.textContent = s.doc + ": " + s.snippet;
+                        box.appendChild(item);
+                    });
+                    details.appendChild(box);
+                    bubble.appendChild(details);
+                }
+            }
+
+            function renderSql(data) {
+                const bubble = addBubble("bot wide");
+                addBadge(bubble, "SQL");
+
+                if (data.row_count > 0 && data.columns && data.rows) {
+                    bubble.appendChild(buildTable(data.columns, data.rows));
+                } else {
+                    const note = document.createElement("div");
+                    note.textContent = data.message || "No results found for that query.";
+                    bubble.appendChild(note);
+                }
+
+                if (data.generated_sql) {
+                    bubble.appendChild(buildSqlPanel(data.generated_sql));
+                    bubble.appendChild(buildActions(data.generated_sql));
+                }
+            }
+
+            function buildTable(columns, rows) {
+                const wrap = document.createElement("div");
+                wrap.className = "table-scroll";
+                const table = document.createElement("table");
+                table.className = "result-table";
+
+                const thead = document.createElement("thead");
+                const headRow = document.createElement("tr");
+                columns.forEach(col => {
+                    const th = document.createElement("th");
+                    th.textContent = col;
+                    headRow.appendChild(th);
+                });
+                thead.appendChild(headRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement("tbody");
+                rows.forEach(row => {
+                    const tr = document.createElement("tr");
+                    row.forEach(cell => {
+                        const td = document.createElement("td");
+                        td.textContent = (cell === null || cell === undefined) ? "—" : String(cell);
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+
+                wrap.appendChild(table);
+                return wrap;
+            }
+
+            function buildSqlPanel(sql) {
+                const details = document.createElement("details");
+                details.className = "sql-panel";
+                const summary = document.createElement("summary");
+                summary.textContent = "Show SQL";
+                details.appendChild(summary);
+                const pre = document.createElement("pre");
+                pre.textContent = sql;
+                details.appendChild(pre);
+                return details;
+            }
+
+            function buildActions(sql) {
+                const row = document.createElement("div");
+                row.className = "actions";
+
+                const summariseBtn = document.createElement("button");
+                summariseBtn.textContent = "Summarise";
+                summariseBtn.addEventListener("click", () => runSummarise(summariseBtn));
+
+                const explainBtn = document.createElement("button");
+                explainBtn.textContent = "Explain";
+                explainBtn.addEventListener("click", () => runExplain(sql, explainBtn));
+
+                row.appendChild(summariseBtn);
+                row.appendChild(explainBtn);
+                return row;
+            }
+
+            async function runSummarise(btn) {
+                btn.disabled = true;
+                btn.textContent = "Summarising...";
+                try {
+                    const res = await fetch("/summarize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ session_id: sessionId })
+                    });
+                    const data = await res.json();
+                    const bubble = addBubble("bot");
+                    const body = document.createElement("div");
+                    body.className = "md";
+                    body.innerHTML = renderMarkdown(data.summary || "No summary available.");
+                    bubble.appendChild(body);
+                } catch (err) {
+                    renderError("Could not summarise. Please try again.");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = "Summarise";
+                    scrollToBottom();
+                }
+            }
+
+            async function runExplain(sql, btn) {
+                btn.disabled = true;
+                btn.textContent = "Explaining...";
+                try {
+                    const res = await fetch("/explain", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sql: sql })
+                    });
+                    const data = await res.json();
+                    const bubble = addBubble("bot");
+                    const body = document.createElement("div");
+                    body.className = "md";
+                    body.innerHTML = renderMarkdown(data.explanation || "No explanation available.");
+                    bubble.appendChild(body);
+                } catch (err) {
+                    renderError("Could not explain. Please try again.");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = "Explain";
+                    scrollToBottom();
+                }
+            }
+
+            // Minimal, XSS-safe markdown: escape first, then apply a few safe transforms.
+            function renderMarkdown(text) {
+                const esc = text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+
+                const lines = esc.split("\n");
+                let html = "";
+                let listType = null; // "ul" | "ol" | null
+
+                const closeList = () => { if (listType) { html += "</" + listType + ">"; listType = null; } };
+
+                const inline = s => s
+                    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                    .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+                lines.forEach(raw => {
+                    const line = raw.trim();
+                    if (!line) { closeList(); return; }
+
+                    let m;
+                    if ((m = line.match(/^###\s+(.*)$/))) {
+                        closeList();
+                        html += "<h3>" + inline(m[1]) + "</h3>";
+                    } else if ((m = line.match(/^[-*]\s+(.*)$/))) {
+                        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+                        html += "<li>" + inline(m[1]) + "</li>";
+                    } else if ((m = line.match(/^\d+\.\s+(.*)$/))) {
+                        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+                        html += "<li>" + inline(m[1]) + "</li>";
+                    } else {
+                        closeList();
+                        html += "<p>" + inline(line) + "</p>";
+                    }
+                });
+                closeList();
+                return html;
+            }
+
+            // ----- Theme toggle (persisted) -----
+            const themeToggle = document.getElementById("themeToggle");
+            const themeImage = document.getElementById("themeToggle-image");
+            const themeLabel = document.getElementById("themeToggle-label");
+
+            function applyTheme(dark) {
+                document.body.classList.toggle("dark", dark);
+                themeImage.src = dark ? "sun.png" : "moon.png";
+                themeImage.alt = dark ? "Light" : "Dark";
+                themeLabel.textContent = dark ? "Light mode" : "Dark mode";
+            }
+
+            applyTheme(localStorage.getItem("theme") === "dark");
+
+            themeToggle.addEventListener("click", () => {
+                const dark = !document.body.classList.contains("dark");
+                localStorage.setItem("theme", dark ? "dark" : "light");
+                applyTheme(dark);
+            });
+        </script>
+
+    </body>
+</html>

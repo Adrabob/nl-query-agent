@@ -1,0 +1,6 @@
+-- Data loading: DBMS_CLOUD.COPY_DATA from Object Storage, or direct INSERT scripts.
+-- Source: UCI Online Retail dataset (InvoiceNo, StockCode, Description, Quantity,
+--         InvoiceDate, UnitPrice, CustomerID, Country).
+-- The raw CSV is loaded and split into the four normalized tables defined in 01_schema.sql.
+--
+-- TODO Phase 1: fill in after Object Storage bucket and CSV location are confirmed in §6.

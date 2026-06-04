@@ -1,0 +1,14 @@
+[project]
+name = "nl-query-agent"
+version = "0.1.0"
+description = "AI-powered natural language query agent over Oracle Autonomous Database"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.136.3",
+    "httpx>=0.28.1",
+    "oci>=2.177.0",
+    "oracledb>=4.0.1",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.48.0",
+]
