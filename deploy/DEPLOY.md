@@ -3,8 +3,9 @@
 Goal: the app reachable at `http://<PUBLIC_IP>:8000/` with `/health` returning
 `{"status":"ok"}`. One FastAPI process serves both the API and the static UI.
 
-**Architecture chosen:** single OCI Compute VM, uvicorn on port 8000, systemd-managed,
-instance-principal auth for OCI GenAI. No nginx, no containers — fewest moving parts.
+**Architecture chosen:** single OCI Compute VM (Oracle Linux 9, default user `opc`),
+uvicorn on port 8000, systemd-managed, instance-principal auth for OCI GenAI.
+No nginx, no containers — fewest moving parts.
 
 > ⏱️ If smooth: ~45 min. Do the IAM step (3) carefully — it is the #1 silent failure.
 
@@ -22,13 +23,14 @@ instance-principal auth for OCI GenAI. No nginx, no containers — fewest moving
 ## 1. Create the VM (OCI Console)
 1. Compute → Instances → **Create instance**.
 2. Name: `nlquery-vm`.
-3. Image & shape: **Canonical Ubuntu 22.04**, shape **VM.Standard.E4.Flex**, 1 OCPU /
-   8 GB (cheap, comfortable). (A1 Flex ARM also works but x86 avoids wheel surprises.)
+3. Image & shape: **Oracle Linux 9** (default), shape **VM.Standard.E3.Flex**, 1 OCPU /
+   8 GB (cheap, comfortable; 1 GB Micro risks OOM during `uv sync`). E4.Flex needs a
+   PAYG upgrade on Free Trial — E3.Flex is the available equivalent.
 4. Networking: a VCN with a **public subnet**; **Assign a public IPv4 address = Yes**.
-5. SSH keys: upload your public key (or let OCI generate and download the private key).
+5. SSH keys: paste your public key (`~/.ssh/id_ed25519.pub`).
 6. Create. Wait for **Running**, note the **Public IP** → this is `<PUBLIC_IP>`.
 
-*Verify:* `ssh ubuntu@<PUBLIC_IP>` connects.
+*Verify:* `ssh opc@<PUBLIC_IP>` connects (Oracle Linux default user is `opc`).
 
 ---
 
@@ -40,11 +42,11 @@ Networking → your VCN → the public subnet's **Security List** → **Add Ingr
 - IP Protocol: TCP, Destination port range: `8000`
 - (Port 22 ingress already exists by default.)
 
-### 2b. OS firewall (Ubuntu on OCI ships iptables rules that block non-SSH ports)
+### 2b. OS firewall (Oracle Linux runs firewalld, which blocks non-SSH ports)
 On the VM:
 ```bash
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT
-sudo netfilter-persistent save
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --reload
 ```
 > If you ever can't reach the port, 90% of the time it's one of these two layers.
 
@@ -68,15 +70,14 @@ Identity → Dynamic Groups directly — same rule and policy.)*
 ---
 
 ## 4. Install runtime + code on the VM
-SSH in, then:
+SSH in (`ssh opc@<PUBLIC_IP>`), then:
 ```bash
-sudo apt-get update && sudo apt-get install -y git
+sudo dnf install -y git
 curl -LsSf https://astral.sh/uv/install.sh | sh        # installs uv to ~/.local/bin
 source ~/.bashrc
 
-# Get the code. Option A (recommended for easy updates): clone from your GitHub repo.
-git clone <YOUR_REPO_URL> ~/Hackathon
-# Option B (no remote): from your laptop, scp the project folder up (excludes below).
+# Clone from your GitHub repo (recommended for easy `git pull` updates).
+git clone https://github.com/Adrabob/nl-query-agent.git ~/Hackathon
 cd ~/Hackathon
 
 uv sync                                                 # uv fetches Python 3.11+ and deps
@@ -84,14 +85,14 @@ uv sync                                                 # uv fetches Python 3.11
 
 ### 4a. Copy the secrets the repo does NOT contain (run from your LAPTOP)
 ```powershell
-scp -r "C:\Users\Arda Kaya\Desktop\Hackathon\wallet" ubuntu@<PUBLIC_IP>:~/Hackathon/wallet
-scp     "C:\Users\Arda Kaya\Desktop\Hackathon\.env"   ubuntu@<PUBLIC_IP>:~/Hackathon/.env
+scp -r "C:\Users\Arda Kaya\Desktop\Hackathon\wallet" opc@<PUBLIC_IP>:~/Hackathon/wallet
+scp     "C:\Users\Arda Kaya\Desktop\Hackathon\.env"   opc@<PUBLIC_IP>:~/Hackathon/.env
 ```
 
 ### 4b. Fix paths inside the VM's `.env`
 Edit `~/Hackathon/.env` on the VM so `WALLET_DIR` is the absolute VM path:
 ```
-WALLET_DIR=/home/ubuntu/Hackathon/wallet
+WALLET_DIR=/home/opc/Hackathon/wallet
 ```
 (Other values — ADB_*, OCI_* — stay as they are in your local .env.)
 

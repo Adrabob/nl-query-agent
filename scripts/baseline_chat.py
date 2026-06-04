@@ -65,6 +65,19 @@ QUESTIONS = [
     ("U7", "u7", "how is average order value calculated and what is it for Germany?"),  # borderline
     ("U8a", "uturn", "top 3 products by total revenue"),
     ("U8b", "uturn", "now show me only the ones sold in the UK"),
+
+    # Scope-limitation questions — these ask for data the dataset does NOT have.
+    # After the router fix they must route to "docs" (a grounded "not available"),
+    # not "sql" (which fabricates). S8 is a guard: month-over-month IS valid SQL and
+    # must stay "sql" — it proves the fix did not over-route growth questions.
+    ("S1", "s1", "what was our year over year revenue growth?"),          # -> docs
+    ("S2", "s2", "what are our current stock levels?"),                   # -> docs
+    ("S3", "s3", "what is the age and gender breakdown of our customers?"),  # -> docs
+    ("S4", "s4", "what is our gross margin by product?"),                 # -> docs
+    ("S5", "s5", "which customers are at risk of churning?"),             # -> docs
+    ("S6", "s6", "what are our average shipping times?"),                 # -> docs
+    ("S7", "s7", "predict next month's revenue"),                         # -> docs
+    ("S8", "s8", "month over month revenue growth by country"),          # -> sql (guard)
 ]
 
 

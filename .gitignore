@@ -4,6 +4,10 @@
 # Internal project source-of-truth (kept local, not published)
 CLAUDE.md
 
+# Regenerable test snapshots from scripts/baseline_chat.py
+scripts/before.json
+scripts/after.json
+
 # Oracle Wallet files
 *.p12
 *.sso
